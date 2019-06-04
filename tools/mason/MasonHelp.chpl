@@ -405,3 +405,13 @@ proc masonSystemPcHelp() {
 }
 
 
+proc masonPublishHelp(){
+  writeln("Publish a package to the mason-registry repository");
+  writeln();
+  writeln("Usage:");
+  writeln("    mason publish [options]");
+  writeln();
+  writeln("Options:");
+  writeln("    -h, --help                   Display this message");
+  writeln(); 
+}
