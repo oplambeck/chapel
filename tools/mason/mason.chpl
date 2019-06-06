@@ -89,7 +89,7 @@ proc main(args: [] string) throws {
       when 'env' do masonEnv(args);
       when 'doc' do masonDoc(args);
       when 'publish' do masonPublish(args);
-      when 'clean' do masonClean();
+      when 'clean' do masonClean(args);
       when 'help' do masonHelp();
       when 'version' do printVersion();
       when '--list' do masonList();
@@ -110,8 +110,12 @@ proc main(args: [] string) throws {
 }
 
 
-proc masonClean() {
+proc masonClean(args) {
   try! {
+    if args.size == 3{
+      masonCleanHelp();
+      exit();
+    }
     const cwd = getEnv("PWD");
 
     const projectHome = getProjectHome(cwd);
@@ -125,6 +129,10 @@ proc masonClean() {
 
 proc masonDoc(args) {
   try! {
+    if args.size == 3{
+      masonDocHelp();
+      exit();
+    }
     const tomlName = 'Mason.toml';
     const cwd = getEnv("PWD");
 
