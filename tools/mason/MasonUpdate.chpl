@@ -23,6 +23,7 @@ use MasonUtils;
 use MasonEnv;
 use MasonSystem;
 use MasonExternal;
+use MasonHelp;
 
 
 /*
@@ -45,7 +46,7 @@ private var failedChapelVersion : [1..0] string;
 /* Finds a Mason.toml file and updates the Mason.lock
    generating one if it doesnt exist */
 proc UpdateLock(args: [] string, tf="Mason.toml", lf="Mason.lock") {
-
+  
   try! {
 
     const cwd = getEnv("PWD");
@@ -464,4 +465,3 @@ private proc getDependencies(tomlTbl: unmanaged Toml) {
   }
   return deps;
 }
-
