@@ -1,8 +1,12 @@
-use MasonUtils;
-use FileSystem;
-use Spawn;
-use TOML;
 
+use MasonUtils;
+use Spawn;
+use FileSystem;
+use TOML;
+use MasonEnv;
+use MasonNew;
+use MasonModify;
+use Random;
 
 proc masonDoctor(args) throws {
   var isPersonal = false;
@@ -55,7 +59,7 @@ proc pathCheck(path : string) throws {
 
   try! {
     var remoteCheck = spawn(['git ls-remote ' + path], stdout=CLOSE);
-    var localCheck = spawn(['cd ' + path], stdout=CLOSE);
+    var localCheck = spawn.(['cd ' + path], stdout=CLOSE);
     remoteCheck.wait();
     localCheck.wait();
     if remoteCheck.exit_status  == 0 {
