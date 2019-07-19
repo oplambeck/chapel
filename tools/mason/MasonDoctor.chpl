@@ -4,59 +4,76 @@ use Spawn;
 use TOML;
 
 
-proc MasonDoctor(args) throws {
+proc masonDoctor(args) throws {
   var isPersonal = false;
   var path = '';
+  var trueIfLocal = true;
 
   try! {
+    if hasOptions(args, "-h", "--help") {
+      masonDoctorHelp();
+      exit(0);
+    }
+
     const projectHome = getProjectHome(here.cwd());
     for arg in args[2..] {
-      if arg == '-h' || '--help' {
-        masonDoctorHelp();
-        exit(0);
-      }
-      else if arg == '--registry' {
+      if arg == '--registry' {
         isPersonal = true;
       }
-      else if pathCheck(arg) {
+      else {
+        trueIfLocal = pathCheck(arg);
         path = arg;
       }
-      else if {
-               if !isPersonal {
-                               doctor(
-
-               }
-        doctor(isLocal, path, projectHome);
-      }
+    }
+    if isPersonal {
+      doctor(path, projectHome, trueIfLocal);
+    }
+    else if args.size == 2 && !isPersonal {
+      doctor(MASON_HOME, projectHome, trueIfLocal);
+    }
+    else {
+      throw new owned MasonError('Not a valid Command, see mason doctor help');
     }
   }
-  catch {
+  catch e : MasonError {
+    writeln(e.message());
+    exit(0);
   }
 
 }
 
+proc doctor(path : string, projectHome : string, trueIfLocal : bool) throws {
+  try! {
+    const openToml = openreader("Mason.toml");
+    const tomlFile = parseToml(openToml);
+
+  }
+}
 
 proc pathCheck(path : string) throws {
   var isPathLocal = false;
+
   try! {
-    const remoteCheck = spawn(["runWithStatus('git ls-remote ' + path)"], stdout=CLOSE);
-    const localCheck = spawn(["runWithStatus('cd ' + path)"], stdout=CLOSE);
+    var remoteCheck = spawn(['git ls-remote ' + path], stdout=CLOSE);
+    var localCheck = spawn(['cd ' + path], stdout=CLOSE);
     remoteCheck.wait();
     localCheck.wait();
-    if remoteCheck == 0 {
+    if remoteCheck.exit_status  == 0 {
       isPathLocal = false;
       return isPathLocal;
     }
-    else if localCheck == 0 {
+    else if localCheck.exit_status == 0 {
       isPathLocal = true;
       return isPathLocal;
     }
     else {
       throw new owned MasonError(path + ' is not a valid path to a mason-registry');
+      exit(0);
     }
   }
-  catch e: MasonError{
-    writeln(e.message);
+  catch e : MasonError {
+    writeln(e.message());
     exit(1);
   }
 }
+

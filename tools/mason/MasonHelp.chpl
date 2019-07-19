@@ -423,3 +423,8 @@ proc masonDocHelp() {
   writeln("For instructions on setting up chpldoc, please view its documentation.");
   writeln();
 }
+
+proc masonDoctorHelp() {
+  writeln("PlaceHolder");
+  writeln();
+}
