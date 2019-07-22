@@ -1,4 +1,3 @@
-
 use MasonUtils;
 use Spawn;
 use FileSystem;
@@ -7,6 +6,7 @@ use MasonEnv;
 use MasonNew;
 use MasonModify;
 use Random;
+use Regexp;
 
 proc masonDoctor(args) throws {
   var isPersonal = false;
@@ -19,65 +19,66 @@ proc masonDoctor(args) throws {
       exit(0);
     }
 
-    const projectHome = getProjectHome(here.cwd());
-    for arg in args[2..] {
+    const packageHome = getProjectHome(here.cwd());
+
+    if args.size == 2 {
+      doctor(MASON_HOME, packageHome);
+    }
+    for arg in args {
       if arg == '--registry' {
         isPersonal = true;
       }
       else {
-        trueIfLocal = pathCheck(arg);
-        path = arg;
+        if isPersonal {
+          path = arg;
+        }
       }
     }
-    if isPersonal {
-      doctor(path, projectHome, trueIfLocal);
-    }
-    else if args.size == 2 && !isPersonal {
-      doctor(MASON_HOME, projectHome, trueIfLocal);
+    doctor(path, packageHome);
+
+  }
+  catch e : MasonError {
+    writeln(e.message());
+  }
+}
+
+proc doctor(path : string, projectHome : string) throws {
+  var trueIfLocal : bool = true;
+  if isPathRemote(path) then trueIfLocal = false;
+
+  checkPath(path, trueIfLocal);
+  exit(0);
+}
+
+proc checkPath(path : string, trueIfLocal : bool) throws {
+  try! {
+    if trueIfLocal {
+      if exists(path) then return true;
+      else {
+        throw new owned MasonError(path + " is not a valid path");
+        exit(0);
+      }
     }
     else {
-      throw new owned MasonError('Not a valid Command, see mason doctor help');
+      var command = ('git ls-remote ' + path).split();
+      var checkRemote = spawn(command, stdout=PIPE);
+      checkRemote.wait();
+      if checkRemote.exit_status == 0 then return true;
+      else {
+        throw new owned MasonError(path + " is not a valid remote path");
+        exit(0);
+      }
     }
   }
   catch e : MasonError {
     writeln(e.message());
     exit(0);
   }
-
 }
 
-proc doctor(path : string, projectHome : string, trueIfLocal : bool) throws {
-  try! {
-    const openToml = openreader("Mason.toml");
-    const tomlFile = parseToml(openToml);
-
+proc isPathRemote(path : string) throws {
+  if path.find(":") == 0 {
+    return false;
   }
+  else return true;
 }
-
-proc pathCheck(path : string) throws {
-  var isPathLocal = false;
-
-  try! {
-    var remoteCheck = spawn(['git ls-remote ' + path], stdout=CLOSE);
-    var localCheck = spawn.(['cd ' + path], stdout=CLOSE);
-    remoteCheck.wait();
-    localCheck.wait();
-    if remoteCheck.exit_status  == 0 {
-      isPathLocal = false;
-      return isPathLocal;
-    }
-    else if localCheck.exit_status == 0 {
-      isPathLocal = true;
-      return isPathLocal;
-    }
-    else {
-      throw new owned MasonError(path + ' is not a valid path to a mason-registry');
-      exit(0);
-    }
-  }
-  catch e : MasonError {
-    writeln(e.message());
-    exit(1);
-  }
-}
-
