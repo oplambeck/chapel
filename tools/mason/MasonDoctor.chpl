@@ -46,14 +46,24 @@ proc doctor(path : string, projectHome : string) throws {
   var trueIfLocal : bool = true;
   if isPathRemote(path) then trueIfLocal = false;
 
-  checkPath(path, trueIfLocal);
+  if checkPath(path, trueIfLocal) {
+    const gitResults = [];
+    gitResults = gitChecks(path, projectHome);
+  }
+  
   exit(0);
+}
+
+private proc gitChecks(path : string , projectHome : string) {
+  
 }
 
 proc checkPath(path : string, trueIfLocal : bool) throws {
   try! {
     if trueIfLocal {
-      if exists(path) then return true;
+      if exists(path) && exists(path + "/Bricks/") {
+        return true;
+      }
       else {
         throw new owned MasonError(path + " is not a valid path");
         exit(0);
