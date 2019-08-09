@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-=======
 /*
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
@@ -19,7 +17,7 @@
  * limitations under the License.
  */
 
->>>>>>> Started to overhaul masonPublish to take a path to a different registry as an argument.
+
 use MasonUtils;
 use Spawn;
 use FileSystem;
@@ -46,33 +44,30 @@ proc masonPublish(args : [] string) throws {
     }
     for arg in args [1..] {
       if arg == "--dry-run" then dry = true;
-      else if arg == "--registry" {
-        registry = true;
-      }
       else {
         path = arg;
       }
     }
+    if args.size == 2 then path = MASON_HOME;
 
-    if registry && !path.isEmpty() && !dry {
-      if checkPath(path, trueIfLocal) {
+    if checkPath(path, trueIfLocal) && !dry {
         if !trueIfLocal {
           username = getUsername();
-          publishPackage(username, path, dry, registry, trueIfLocal);
+          publishPackage(username, path, dry, trueIfLocal);
         }
         else {
-          publishPackage("", path, dry, registry, trueIfLocal);
+          publishPackage("", path, dry, trueIfLocal);
         }
-      }
-      else {
-        throw new owned MasonError(path + " is not a valid path");
-      }
+      } 
+    else {
+      throw new owned MasonError(path + " is not a valid path");
     }
-    else if args.size == 2 || (!trueIfLocal && registry) && !dry {
+
+    else if args.size == 2 || (!trueIfLocal && !dry) {
       if doesGitOriginExist() {
         username = getUsername();
         var checkResult = usernameCheck(username);
-        if checkResult == 0 then publishPackage(username, MASON_HOME, dry, registry, trueIfLocal);
+        if checkResult == 0 then publishPackage(username, MASON_HOME, dry, trueIfLocal);
         else {
           const badUsernameError = 'mason-registry is not forked or ' + username + ' is not a valid username \n';
           const badForkError = 'Make sure you are connected to the internet before publishing.';
