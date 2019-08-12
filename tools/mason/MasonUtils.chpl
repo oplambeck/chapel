@@ -127,7 +127,7 @@ proc runWithProcess(command, quiet=false) throws {
   try {
     var cmd = command.split();
     var process = spawn(cmd, stdout=PIPE, stderr=PIPE);
-
+    process.wait();
     return process;
   }
   catch {

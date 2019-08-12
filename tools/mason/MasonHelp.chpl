@@ -440,3 +440,7 @@ proc masonDocHelp() {
   writeln("For instructions on setting up chpldoc, please view its documentation.");
   writeln();
 }
+
+proc masonMortarHelp() {
+  writeln('Will replace later');
+}

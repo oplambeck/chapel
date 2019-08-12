@@ -34,6 +34,7 @@ use FileSystem;
 use MasonSystem;
 use MasonExternal;
 use MasonPublish;
+use MasonMortar;
 
 /*
 
@@ -90,6 +91,7 @@ proc main(args: [] string) throws {
       when 'doc' do masonDoc(args);
       when 'publish' do masonPublish(args);
       when 'clean' do masonClean(args);
+      when 'mortar' do masonMortar(args);
       when 'help' do masonHelp();
       when 'version' do printVersion();
       when '--list' do masonList();
