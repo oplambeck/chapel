@@ -27,173 +27,62 @@ use MasonNew;
 use MasonModify;
 use Random;
 
-
-
-
-proc masonPublish(args : [] string) throws {
-  var dry = false;
-  var registry = false;
-  var path = MASON_HOME;
-  var username = "";
-  var trueIfLocal = isPathLocal(path);
-  if args.size == 2 then trueIfLocal = false;
+/* Top Level procedure that gets called from mason.chpl that takes in arguments from command line.
+   Returns the help output in '-h' or '--help' exits in the arguments.
+   If --dry-run is passed then it checks to see if the package is able to be published.
+   Takes in the username of the package owner as an argument
+ */
+proc masonPublish(args: [] string) throws {
   try! {
     if hasOptions(args, "-h", "--help") {
       masonPublishHelp();
       exit(0);
     }
-    for arg in args [1..] {
-      if arg == "--dry-run" then dry = true;
+    var dry = false;
+    var path = '';
+    var username = getUsername();
+    var isLocal = false;
+
+    for arg in args[2..] {
+      if arg == '--dry-run' then dry = true;
+      else path = arg;
+    }
+    if path.isEmpty() {
+      path = MASON_HOME;
+    }
+    else {
+      isLocal = isPathLocal(path);
+    }
+    
+    if checkPath(path, isLocal) {
+      if dry {
+        dryRun(username, path, isLocal);
+      }
       else {
-        path = arg;
+        publishPackage(username, path, isLocal);
       }
-    }
-    if args.size == 2 then path = MASON_HOME;
-
-    if checkPath(path, trueIfLocal) && !dry {
-        if !trueIfLocal {
-          username = getUsername();
-          publishPackage(username, path, dry, trueIfLocal);
-        }
-        else {
-          publishPackage("", path, dry, trueIfLocal);
-        }
-      } 
-    else {
-      throw new owned MasonError(path + " is not a valid path");
-    }
-
-    else if args.size == 2 || (!trueIfLocal && !dry) {
-      if doesGitOriginExist() {
-        username = getUsername();
-        var checkResult = usernameCheck(username);
-        if checkResult == 0 then publishPackage(username, MASON_HOME, dry, trueIfLocal);
-        else {
-          const badUsernameError = 'mason-registry is not forked or ' + username + ' is not a valid username \n';
-          const badForkError = 'Make sure you are connected to the internet before publishing.';
-          throw new owned MasonError(badUsernameError + badForkError);
-        }
-      }
-      else throw new owned MasonError('Must have remote origin for package in order to publish.');
-    }
-    else if dry {
-      username = getUsername();
-      dryRun(username, registry, trueIfLocal);
+      throw new MasonError(path + ' is not a valid path.');
     }
     else {
-      var passed = "";
-      for arg in args {
-        passed += arg + ' ';
-      }
-      writeln(passed + ' does not meet "mason publish [options] <path>" syntax');
-    }
+      const badSyntaxMessage = ' does not meet the "mason publish [options]" syntax';
+      writeln('"' + args[0]+ ' '  + args[1] + ' ' + args[2] + badSyntaxMessage);
+      writeln('See "mason publish -h" for more details');
+      exit(0);
+     }
   }
-  catch e : MasonError {
+  catch e: MasonError {
     writeln(e.message());
     exit(1);
   }
 }
 
-
-/* Main Script that goes through the act of publishing the package to the mason registry.
-   Takes the package owners GitHub username as input will throw errors through command
-   line git commands if any of the git calls fails.
- */
-proc publishPackage(username: string, path : string, dry : bool, registry : bool, trueIfLocal : bool) throws {
-  const packageLocation = absPath(here.cwd());
-  var stream = makeRandomStream(int);
-  var uniqueDir = stream.getNext(): string;
-  const name = getPackageName();
-  var safeDir = '';
-
-  if (registry && trueIfLocal) then safeDir = path;
-  else {
-    safeDir = MASON_HOME + '/tmp/' + name + '-' + uniqueDir;
+proc isPathLocal(path : string) throws {
+  if path.find(":") == 0 {
+    return true;
   }
-
-  try! {
-    if !exists(MASON_HOME + '/tmp') &&  !registry {
-      mkdir(MASON_HOME + '/tmp');
-    }
-    if !registry {
-      mkdir(safeDir);
-    }
-
-    if !registry {
-      cloneMasonReg(username, safeDir);
-      branchMasonReg(username, name, safeDir);
-    }
-
-    addPackageToBricks(packageLocation, safeDir, name, path, trueIfLocal);
-
-    if (registry && !trueIfLocal) || !registry {
-      gitC(safeDir + "/mason-registry", "git add .");
-      gitC(safeDir + "/mason-registry", "git commit -m '" + name + "'");
-      gitC(safeDir + "/mason-registry", 'git push --set-upstream origin ' + name, true);
-      rmTree(safeDir + '/');
-      writeln('--------------------------------------------------------------------');
-      writeln('Go to the above link to open up a Pull Request to the mason-registry');
-    }
-    else {
-      writeln("Package has been added to local Bricks");
-    }
-  }
-  catch {
-    if (exists(safeDir) && !trueIfLocal) then rmTree(safeDir + '/');
-    writeln('Error publishing your package to the mason-registry');
-  }
+  else return false;
 }
 
-/* If --dry-run is passed then it takes the username and checks to see if the mason-registry is forked
- and the package has a git remote origin. If both exist then the package can be published.
- */
-proc dryRun(username: string, registry : bool, trueIfLocal : bool) throws {
-  if !registry {
-    var fork = false;
-    var remoteCheck = checkIfForkExists(username: string);
-    if remoteCheck == 0 {
-      fork = true;
-    }
-    var git = false;
-    if doesGitOriginExist() {
-      git = true;
-    }
-    if git && fork {
-      writeln('Package can be published to the mason-registry');
-      writeln('Commands that will be run:');
-      writeln('> git clone git:github.com:[username]/mason-registry mason-registry');
-      writeln('> git checkout -b [package name]');
-      writeln('Package Name will be added to the Bricks in the mason-registry');
-      writeln('> git add .');
-      writeln('> git commit -m [package name]');
-      writeln('> git push --set-upstream origin [package name]');
-    }
-    else {
-      if fork == false {
-        throw new owned MasonError('mason-registry is not forked on your GitHub');
-      }
-      else {
-        throw new owned MasonError('Package does not gave a git origin');
-      }
-    }
-  }
-  else {
-    if trueIfLocal {
-      writeln("Package can be added to local registry");
-    }
-    else {
-      if doesGitOriginExist() {
-        writeln("Package can be published to personal remote registry");
-      }
-      else throw new owned MasonError('Package does not have a git origin');
-    }
-  }
-}
-
-/* When passed a path and whether or not that path is a local or remote path,
-   the function checks to make sure that it is a valid path to a mason-registry
-   by checking the existence of the Bricks
- */
 proc checkPath(path : string, trueIfLocal : bool) throws {
   try! {
     if trueIfLocal {
@@ -221,16 +110,80 @@ proc checkPath(path : string, trueIfLocal : bool) throws {
     exit(0);
   }
 }
-
-/* Uses the existence of a colon to see if a passed path is a local or remote path
+/* Main Script that goes through the act of publishing the package to the mason registry.
+   Takes the package owners GitHub username as input will throw errors through command
+   line git commands if any of the git calls fails.
  */
-proc isPathLocal(path : string) throws {
-  if path.find(":") == 0 {
-    return true;
+proc publishPackage(username: string, path : string, isLocal : bool) throws {
+  const packageLocation = absPath(here.cwd());
+  var stream = makeRandomStream(int);
+  var uniqueDir = stream.getNext(): string;
+  const name = getPackageName();
+
+  if isLocal then safeDir = path;
+  else {
+    safeDir = MASON_HOME + '/tmp/' + name + '-' + uniqueDir;
   }
-  else return false;
+
+  try! {
+    if !isLocal {
+      if !exists(path + '/tmp') then mkdir(path + '/tmp');
+      mkdir(safeDir);
+    }
+    if !isLocal {
+      cloneMasonReg(username, safeDir, path);
+      branchMasonReg(username, name, safeDir, path);
+    }
+
+    addPackageToBricks(packageLocation, safeDir, name, path, isLocal);
+
+    if !isLocal {
+      gitC(safeDir + "/mason-registry", "git add .");
+      gitC(safeDir + "/mason-registry", "git commit -m '" + name + "'");
+      gitC(safeDir + "/mason-registry", 'git push --set-upstream origin ' + name, true);
+      rmTree(safeDir + '/');
+      writeln('--------------------------------------------------------------------');
+      writeln('Go to the above link to open up a Pull Request to the mason-registry');
+    }
+  }
+  catch {
+    if exists(safeDir) then rmTree(safeDir + '/');
+    writeln('Error publishing your package to the mason-registry');
+  }
 }
 
+/* If --dry-run is passed then it takes the username and checks to see if the mason-registry is forked
+ and the package has a git remote origin. If both exist then the package can be published.
+ */
+proc dryRun(username: string) throws {
+  var fork = false;
+  var remoteCheck = checkIfForkExists(username: string);
+  if remoteCheck == 0 {
+    fork = true;
+  }
+  var git = false;
+  if doesGitOriginExist() {
+    git = true;
+  }
+  if git && fork {
+    writeln('Package can be published to the mason-registry');
+    writeln('Commands that will be run:');
+    writeln('> git clone git:github.com:[username]/mason-registry mason-registry');
+    writeln('> git checkout -b [package name]');
+    writeln('Package Name will be added to the Bricks in the mason-registry');
+    writeln('> git add .');
+    writeln('> git commit -m [package name]');
+    writeln('> git push --set-upstream origin [package name]');
+  }
+  else {
+    if fork == false {
+      throw new owned MasonError('mason-registry is not forked on your GitHub');
+    }
+    else {
+      throw new owned MasonError('Package does not gave a git origin');
+    }
+  }
+}
 
 /* Opens Spawn call to get username for the mason registry fork
  */
@@ -260,11 +213,18 @@ private proc getUsername() {
 
 /* Clones the mason registry fork from the users repo. Takes username as input.
  */
-proc cloneMasonReg(username: string, safeDir : string) throws {
+proc cloneMasonReg(username: string, safeDir : string, path : string) throws {
   try! {
-    const gitClone = 'git clone --quiet git@github.com:';
-    var ret = gitC(safeDir, gitClone  + username + "/mason-registry mason-registry", false);
-    return ret;
+    if path == MASON_HOME {
+      const gitClone = 'git clone --quiet git@github.com:';
+      var ret = gitC(safeDir, gitClone  + username + "/mason-registry mason-registry", false);
+      return ret;
+    }
+    else {
+      const gitPath = 'git clone --quiet ';
+      var gitCall = gitC(safeDir, gitPath + path, false);
+      return gitCall;
+    }
   }
   catch {
     writeln('Error cloning the fork of mason-registry');
@@ -290,7 +250,7 @@ private proc gitUrl() {
 /* Takes the git username and creates a new branch of the mason registry users fork,
   name or branch is taken from the Mason.toml of the mason package.
  */
-proc branchMasonReg(username: string, name: string, safeDir: string) throws {
+proc branchMasonReg(username: string, name: string, safeDir: string, path : string) throws {
   try! {
     const branchCommand = "git checkout --quiet -b  "+ name: string;
     var ret = gitC(safeDir + '/mason-registry', branchCommand, true);
@@ -321,14 +281,13 @@ proc getPackageName() throws {
 /* Adds package to the Bricks of the mason-registry branch and then adds the version.toml
  with the source url of the package's GitHub repo.
  */
-private proc addPackageToBricks(projectLocal: string, safeDir: string, name : string, path : string, trueIfLocal : bool) throws {
+private proc addPackageToBricks(projectLocal: string, safeDir: string, name : string, isLocal : bool) throws {
   try! {
-    
+
     const toParse = open(projectLocal+ "/Mason.toml", iomode.r);
     var tomlFile = new owned(parseToml(toParse));
     const versionNum = tomlFile['brick']['version'].s;
-
-    if !trueIfLocal {
+    if !isLocal {
       mkdir(safeDir + "/mason-registry/Bricks/" + name);
       const baseToml = tomlFile;
       var newToml = open(safeDir + "/mason-registry/Bricks/" + name + "/" + versionNum + ".toml", iomode.cw);
@@ -350,7 +309,7 @@ private proc addPackageToBricks(projectLocal: string, safeDir: string, name : st
   }
   catch {
     writeln('ERROR: ' + name + ' already exists in the Bricks');
-    if !trueIfLocal then rmTree(safeDir + '/');
+    if !isLocal then rmTree(safeDir + '/');
     exit(1);
   }
 }
