@@ -46,10 +46,13 @@ proc masonPublish(ref args: list(string)) throws {
       masonPublishHelp();
       exit(0);
     }
+
     var dry = hasOptions(args, "--dry-run");
     var registryPath = '';
     var username = getUsername();
     var isLocal = false;
+    var check = false;
+
 
     const badSyntaxMessage = 'Arguments does not follow "mason publish [options] <registry>" syntax';
     if args.size > 5 {
@@ -76,6 +79,9 @@ proc masonPublish(ref args: list(string)) throws {
     if checkRegistryPath(registryPath, isLocal) {
       if dry {
         dryRun(username, registryPath, isLocal);
+      }
+      else if check && !dry {
+        check(username, path, isLocal);
       }
       else {
         publishPackage(username, registryPath, isLocal);
@@ -353,4 +359,38 @@ private proc addPackageToBricks(projectLocal: string, safeDir: string, name : st
     if !isLocal then rmTree(safeDir + '/');
     throw new owned MasonError('Unable to publish your package to the registry, make sure your package is a git repository.');
   }
+}
+
+proc check(username : string, path : string, trueIfLocal : bool) throws {
+  projectHome = here.cwd();
+  var gitResults = gitChecks(path, projectHome, trueIfLocal);
+  var moduleResult = moduleCheck(projectHome);
+  writeln(gitResults);
+  writeln(moduleResult);
+  exit(0);
+}
+
+private proc moduleCheck(projectHome : string) {
+  const subModules = listdir(projectHome + '/src');
+  if subModules.size > 1 then return false;
+  else return true;
+}
+
+
+private proc gitChecks(path : string , projectHome : string, trueIfLocal : bool) {
+  var remoteUrlCheck = gitUrlCheck(projectHome, trueIfLocal);
+  return remoteUrlCheck;
+}
+
+private proc gitUrlCheck(projectHome : string, trueIfLocal : bool) {
+  if !trueIfLocal {
+    var result = runCommand('git config --get remote.origin.url', true);
+    var status = runWithStatus('git config --get remote.origin.url', false);
+    if status != 0 {
+      return false;
+    }
+    writeln(result);
+    return true;
+  }
+  else return true;
 }
