@@ -81,7 +81,7 @@ proc masonPublish(ref args: list(string)) throws {
         dryRun(username, registryPath, isLocal);
       }
       else if check && !dry {
-        check(username, path, isLocal);
+        check(username, path, isLocal, args);
       }
       else {
         publishPackage(username, registryPath, isLocal);
@@ -361,12 +361,14 @@ private proc addPackageToBricks(projectLocal: string, safeDir: string, name : st
   }
 }
 
-proc check(username : string, path : string, trueIfLocal : bool) throws {
-  projectHome = here.cwd();
-  var gitResults = gitChecks(path, projectHome, trueIfLocal);
-  var moduleResult = moduleCheck(projectHome);
+proc check(username : string, path : string, trueIfLocal : bool, args) throws {
+  var projectCheckHome = here.cwd();
+  var gitResults = gitChecks(path, projectCheckHome, trueIfLocal);
+  var moduleResult = moduleCheck(projectCheckHome);
+  var envMason = returnMasonEnv(args);
   writeln(gitResults);
   writeln(moduleResult);
+  writeln(envMason);
   exit(0);
 }
 
@@ -394,3 +396,9 @@ private proc gitUrlCheck(projectHome : string, trueIfLocal : bool) {
   }
   else return true;
 }
+
+private proc returnMasonEnv(args) {
+  var env = masonEnv(args);
+  return env;
+}
+
