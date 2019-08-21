@@ -51,7 +51,7 @@ proc masonPublish(ref args: list(string)) throws {
     var registryPath = '';
     var username = getUsername();
     var isLocal = false;
-    var check = false;
+    var checkFlag = hasOptions(args, "--check");
 
 
     const badSyntaxMessage = 'Arguments does not follow "mason publish [options] <registry>" syntax';
@@ -61,7 +61,7 @@ proc masonPublish(ref args: list(string)) throws {
 
     if args.size > 2 {
       var potentialPath = args.pop();
-      if (potentialPath != '--dry-run') && (potentialPath != '--no-update') {
+      if (potentialPath != '--dry-run') && (potentialPath != '--no-update') && (potentialPath != '--check') {
         registryPath = potentialPath;
       }
       args.append(potentialPath);
@@ -74,14 +74,15 @@ proc masonPublish(ref args: list(string)) throws {
       isLocal = isRegistryPathLocal(registryPath);
     }
 
+    if checkFlag {
+      check(username, registryPath, isLocal);
+    }
+
     updateRegistry('Mason.toml', args);
 
     if checkRegistryPath(registryPath, isLocal) {
       if dry {
         dryRun(username, registryPath, isLocal);
-      }
-      else if check && !dry {
-        check(username, path, isLocal, args);
       }
       else {
         publishPackage(username, registryPath, isLocal);
@@ -361,18 +362,56 @@ private proc addPackageToBricks(projectLocal: string, safeDir: string, name : st
   }
 }
 
-proc check(username : string, path : string, trueIfLocal : bool, args) throws {
+proc check(username : string, path : string, trueIfLocal) throws {
+  const spacer = '------------------------------------------------------'; 
+  const package = (ensureMasonProject(here.cwd(), 'Mason.toml') == 'true');
+  writeln('Mason Project Check:');
+
+  if !package {
+    writeln('    Could not find your configuration file (Mason.toml)');
+    writeln('    Ensure your project is a mason package');
+    }
+  else {
+    writeln('    Package is a Mason package and has a Mason.toml');
+  }
+  writeln(spacer);
+
   var projectCheckHome = here.cwd();
-  var gitResults = gitChecks(path, projectCheckHome, trueIfLocal);
-  var moduleResult = moduleCheck(projectCheckHome);
-  var envMason = returnMasonEnv(args);
-  writeln(gitResults);
-  writeln(moduleResult);
-  writeln(envMason);
+
+  if package {
+    writeln('Main Module Check:');
+    if moduleCheck(projectCheckHome) {
+      writeln('    Your package has only one main module, can be published to a registry.');
+    }
+    else writeln('    Packages with more than one modules cannot be published.');
+    writeln(spacer);
+  }
+
+  if package {
+    writeln('Git Remote Check:');
+    if doesGitOriginExist() {
+      writeln('    Package has a git remote origin and can be published to a remote registry');
+    }
+    else writeln('    Package has no remote origin and cannot be publish to a registry with path:' + path);
+    writeln(spacer);
+  }
+  
   exit(0);
 }
 
-private proc moduleCheck(projectHome : string) {
+private proc ensureMasonProject(cwd : string, tomlName="Mason.toml") : string {
+  const (dirname, basename) = splitPath(cwd);
+  if dirname == '/' {
+    return 'false';
+  }
+  const tomlFile = joinPath(cwd, tomlName);
+  if exists(tomlFile) {
+    return 'true';
+  }
+  return ensureMasonProject(dirname, tomlName);
+}
+
+private proc moduleCheck(projectHome : string) throws {
   const subModules = listdir(projectHome + '/src');
   if subModules.size > 1 then return false;
   else return true;
@@ -384,21 +423,8 @@ private proc gitChecks(path : string , projectHome : string, trueIfLocal : bool)
   return remoteUrlCheck;
 }
 
-private proc gitUrlCheck(projectHome : string, trueIfLocal : bool) {
-  if !trueIfLocal {
-    var result = runCommand('git config --get remote.origin.url', true);
-    var status = runWithStatus('git config --get remote.origin.url', false);
-    if status != 0 {
-      return false;
-    }
-    writeln(result);
-    return true;
-  }
-  else return true;
-}
 
-private proc returnMasonEnv(args) {
-  var env = masonEnv(args);
-  return env;
-}
 
+private proc returnMasonEnv() {
+  return (MASON_HOME, MASON_REGISTRY);
+}
